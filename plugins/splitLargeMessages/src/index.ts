@@ -1,11 +1,11 @@
 import { findByProps } from "@vendetta/metro";
-import { instead } from "@vendetta/patcher";
+import { instead, after } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import { showToast } from "@vendetta/ui/toasts";
 
 export { Settings } from "./Settings";
 
-let unpatch: (() => void) | undefined;
+let patches: (() => void)[] = [];
 
 function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -73,29 +73,40 @@ function splitMessage(text: string, maxLen: number, byNewlines: boolean): string
 
 export const onLoad = () => {
     try {
-        // Inicialización segura de storage usando nullish coalescing asignación
         storage.maxLength ??= 2000;
         storage.byNewlines ??= false;
         storage.delayMs ??= 750;
 
+        // 1. Parchar el módulo de envío de mensajes
         const MessageActions = findByProps("sendMessage", "editMessage");
+        // 2. Buscar el módulo que controla las propiedades y límites de caracteres en el cliente
+        const MessageLimits = findByProps("MAX_MESSAGE_LENGTH") || findByProps("getNativeCharacterLimit");
+
+        // Rompemos el límite del cliente para que no salte el aviso de Nitro al escribir
+        if (MessageLimits) {
+            if (MessageLimits.MAX_MESSAGE_LENGTH) {
+                // Forzamos un límite altísimo de caracteres permitidos en la interfaz
+                Object.defineProperty(MessageLimits, "MAX_MESSAGE_LENGTH", {
+                    value: 999999,
+                    configurable: true,
+                    writable: true
+                });
+            }
+        }
 
         if (!MessageActions) {
-            // Un pequeño delay evita crash si la UI de toasts no está lista al encender
-            setTimeout(() => showToast("SplitLargeMessages: no se encontró MessageActions"), 1000);
-            console.log("[SplitLargeMessages] findByProps devolvió undefined");
+            console.log("[SplitLargeMessages] No se encontró MessageActions");
             return;
         }
 
-        unpatch = instead("sendMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
+        const unpatchSendMessage = instead("sendMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
             const [channelId, message, ...rest] = args;
             const content: string = message?.content ?? "";
-            
-            // Leemos con fallbacks por si acaso
             const maxLen = Number(storage.maxLength ?? 2000);
             const byNewlines = !!(storage.byNewlines ?? false);
             const delayMs = Number(storage.delayMs ?? 750);
 
+            // Si el mensaje es normal, dejamos que pase sin tocar nada
             if (content.length <= maxLen) {
                 return orig(channelId, message, ...rest);
             }
@@ -113,18 +124,22 @@ export const onLoad = () => {
 
                     if (!isLast) await wait(delayMs);
                 }
-                showToast(`Mensaje enviado en ${chunks.length} partes`);
+                setTimeout(() => showToast(`Mensaje enviado en ${chunks.length} partes`), 100);
             })();
 
             return Promise.resolve();
         });
 
-        console.log("[SplitLargeMessages] Plugin cargado correctamente");
+        patches.push(unpatchSendMessage);
+        console.log("[SplitLargeMessages] Plugin cargado y límites parchados");
     } catch (e: any) {
         console.error("[SplitLargeMessages] Error en onLoad:", e);
     }
 };
 
 export const onUnload = () => {
-    unpatch?.();
+    for (const unpatch of patches) {
+        unpatch();
+    }
+    patches = [];
 };
