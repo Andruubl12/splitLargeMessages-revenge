@@ -44,6 +44,7 @@ function splitMessage(text: string, maxLen: number, byNewlines: boolean): string
     }
     if (current) messages.push(current);
 
+    // Formateo de bloques de código (Markdown)
     let pendingBlock: string | null = null;
     let pendingLine: string | null = null;
 
@@ -78,15 +79,36 @@ export const onLoad = () => {
         storage.delayMs ??= 750;
 
         const MessageActions = findByProps("sendMessage", "editMessage");
+        
+        // Buscamos módulos de validación nativos y de conteo de caracteres
         const MessageLimits = findByProps("MAX_MESSAGE_LENGTH") || findByProps("getNativeCharacterLimit");
+        const ChatInputValidation = findByProps("getUploadValueMaxCharacterCount") || findByProps("validateLength");
 
+        // Parche persistente 1: Forzar propiedades de límites en el objeto cada vez que se consulten
         if (MessageLimits) {
-            if (MessageLimits.MAX_MESSAGE_LENGTH) {
+            try {
+                // Redefinimos usando getters para que siempre devuelva el número alto sin importar los resets de Discord
                 Object.defineProperty(MessageLimits, "MAX_MESSAGE_LENGTH", {
-                    value: 999999,
-                    configurable: true,
-                    writable: true
+                    get: () => 999999,
+                    configurable: true
                 });
+                if (MessageLimits.getNativeCharacterLimit) {
+                    patches.push(instead("getNativeCharacterLimit", MessageLimits, () => 999999));
+                }
+            } catch(e) {}
+        }
+
+        // Parche persistente 2: Evitar que el validador del input dispare la UI de Nitro
+        if (ChatInputValidation) {
+            // Si tiene métodos de validación de longitud, los interceptamos para que siempre den "válido"
+            const keysToPatch = ["validateLength", "checkLength", "getCharacterCountWarning"];
+            for (const key of keysToPatch) {
+                if (ChatInputValidation[key]) {
+                    patches.push(instead(key, ChatInputValidation, () => {
+                        // Devolvemos un estado limpio (sin errores ni advertencias)
+                        return { valid: true, error: null, warning: null };
+                    }));
+                }
             }
         }
 
@@ -95,6 +117,7 @@ export const onLoad = () => {
             return;
         }
 
+        // Parche principal: Intercepción del envío y división dinámica en N partes
         const unpatchSendMessage = instead("sendMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
             const [channelId, message, ...rest] = args;
             const content: string = message?.content ?? "";
@@ -102,39 +125,45 @@ export const onLoad = () => {
             const byNewlines = !!(storage.byNewlines ?? false);
             const delayMs = Number(storage.delayMs ?? 750);
 
+            // Si entra en el rango estándar, se envía normal
             if (content.length <= maxLen) {
                 return orig(channelId, message, ...rest);
             }
 
+            // Aquí se dividirá automáticamente en 2, 3, 4 o las partes necesarias basado en la longitud
             const chunks = splitMessage(content, maxLen, byNewlines);
 
             (async () => {
+                showToast(`Dividiendo mensaje en ${chunks.length} partes...`);
+                
                 for (let i = 0; i < chunks.length; i++) {
                     const isLast = i === chunks.length - 1;
+                    
+                    // Modificamos el payload de Discord con el fragmento correspondiente
                     const chunkMessage = isLast
                         ? { ...message, content: chunks[i] }
                         : { ...message, content: chunks[i], stickerIds: [], validNonShortcutEmojis: [] };
 
                     await orig(channelId, chunkMessage, ...rest);
 
+                    // Espera entre envíos para mitigar el Rate Limit (Anti-Spam de Discord)
                     if (!isLast) await wait(delayMs);
                 }
-                setTimeout(() => showToast(`Mensaje enviado en ${chunks.length} partes`), 100);
             })();
 
             return Promise.resolve();
         });
 
         patches.push(unpatchSendMessage);
-        console.log("[SplitLargeMessages] Plugin cargado y límites parchados");
+        console.log("[SplitLargeMessages] Modulo inicializado con división dinámica e inyecciones getter.");
     } catch (e: any) {
-        console.error("[SplitLargeMessages] Error en onLoad:", e);
+        console.error("[SplitLargeMessages] Error crítico en onLoad:", e);
     }
 };
 
 export const onUnload = () => {
     for (const unpatch of patches) {
-        unpatch();
+        try { unpatch(); } catch(e) {}
     }
     patches = [];
 };
