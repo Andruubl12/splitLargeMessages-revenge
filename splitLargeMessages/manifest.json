@@ -1,0 +1,1 @@
+{"name":"SplitLargeMessages","description":"Divide automaticamente los mensajes que superan el limite de caracteres de Discord en varios mensajes mas pequenos, en vez de bloquear el envio.","authors":[{"name":"TuNombre","id":"000000000000000000"}],"main":"index.js","vendetta":{"icon":"ic_message"},"hash":"5e319da8ee6ee9b174d041fd77d8447cdd52301c3637e7f2f2bd12f22565b48e"}
