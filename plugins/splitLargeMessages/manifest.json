@@ -4,7 +4,7 @@
   "authors": [
     { "name": "TuNombre", "id": "000000000000000000" }
   ],
-  "main": "src/index.tsx",
+  "main": "src/index.ts",
   "vendetta": {
     "icon": "ic_message"
   }
