@@ -1,15 +1,11 @@
 import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { useProxy } from "@vendetta/storage"; // Mantiene la UI sincronizada con el storage
+import { useProxy } from "@vendetta/storage"; 
 
-// Extraemos los componentes de formulario estándar de Discord
 const { FormSection, FormSwitchRow, FormInput } = findByProps("FormSection", "FormSwitchRow") || {};
 
 export function Settings() {
-    // Esto hace que React sepa cuándo cambia el storage y actualice la pantalla correctamente
     useProxy(storage);
-
-    // Salvavidas por si Discord cambia los nombres de los componentes
     if (!FormSection || !FormSwitchRow || !FormInput) {
         return null; 
     }
