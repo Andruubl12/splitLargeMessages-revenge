@@ -1,8 +1,8 @@
 {
   "name": "SplitLargeMessages",
-  "description": "Divide automaticamente los mensajes que superan el limite de caracteres de Discord en varios mensajes mas pequenos, en vez de bloquear el envio.",
+  "description": "Automatically splits messages that exceed Discord's character limit into several smaller messages, rather than blocking them from being sent.",
   "authors": [
-    { "name": "TuNombre", "id": "000000000000000000" }
+    { "name": "Andric", "id": "000000000000000000" }
   ],
   "main": "src/index.ts",
   "vendetta": {
