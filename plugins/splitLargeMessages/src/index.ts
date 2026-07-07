@@ -5,11 +5,6 @@ import { showToast } from "@vendetta/ui/toasts";
 
 export { Settings } from "./Settings";
 
-// Valores por defecto (persisten automaticamente via storage)
-if (storage.maxLength === undefined) storage.maxLength = 2000;
-if (storage.byNewlines === undefined) storage.byNewlines = false;
-if (storage.delayMs === undefined) storage.delayMs = 750;
-
 let unpatch: (() => void) | undefined;
 
 function wait(ms: number) {
@@ -78,27 +73,34 @@ function splitMessage(text: string, maxLen: number, byNewlines: boolean): string
 
 export const onLoad = () => {
     try {
-        // La busqueda del modulo se hace ACA (adentro de onLoad),
-        // no al nivel superior del archivo, para asegurarnos de que
-        // Discord ya termino de registrar todos sus modulos internos.
+        // Inicialización segura de storage usando nullish coalescing asignación
+        storage.maxLength ??= 2000;
+        storage.byNewlines ??= false;
+        storage.delayMs ??= 750;
+
         const MessageActions = findByProps("sendMessage", "editMessage");
 
         if (!MessageActions) {
-            showToast("SplitLargeMessages: no se encontro el modulo de mensajes (MessageActions)");
-            console.log("[SplitLargeMessages] findByProps devolvio undefined");
+            // Un pequeño delay evita crash si la UI de toasts no está lista al encender
+            setTimeout(() => showToast("SplitLargeMessages: no se encontró MessageActions"), 1000);
+            console.log("[SplitLargeMessages] findByProps devolvió undefined");
             return;
         }
 
         unpatch = instead("sendMessage", MessageActions, (args: any[], orig: (...a: any[]) => any) => {
             const [channelId, message, ...rest] = args;
             const content: string = message?.content ?? "";
-            const maxLen = Number(storage.maxLength) || 2000;
+            
+            // Leemos con fallbacks por si acaso
+            const maxLen = Number(storage.maxLength ?? 2000);
+            const byNewlines = !!(storage.byNewlines ?? false);
+            const delayMs = Number(storage.delayMs ?? 750);
 
             if (content.length <= maxLen) {
                 return orig(channelId, message, ...rest);
             }
 
-            const chunks = splitMessage(content, maxLen, !!storage.byNewlines);
+            const chunks = splitMessage(content, maxLen, byNewlines);
 
             (async () => {
                 for (let i = 0; i < chunks.length; i++) {
@@ -109,7 +111,7 @@ export const onLoad = () => {
 
                     await orig(channelId, chunkMessage, ...rest);
 
-                    if (!isLast) await wait(Number(storage.delayMs) || 750);
+                    if (!isLast) await wait(delayMs);
                 }
                 showToast(`Mensaje enviado en ${chunks.length} partes`);
             })();
@@ -119,8 +121,7 @@ export const onLoad = () => {
 
         console.log("[SplitLargeMessages] Plugin cargado correctamente");
     } catch (e: any) {
-        showToast(`SplitLargeMessages fallo al cargar: ${e?.message ?? e}`);
-        console.log("[SplitLargeMessages] Error en onLoad:", e);
+        console.error("[SplitLargeMessages] Error en onLoad:", e);
     }
 };
 
