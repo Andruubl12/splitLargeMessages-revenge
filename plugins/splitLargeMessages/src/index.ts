@@ -77,15 +77,11 @@ export const onLoad = () => {
         storage.byNewlines ??= false;
         storage.delayMs ??= 750;
 
-        // 1. Parchar el módulo de envío de mensajes
         const MessageActions = findByProps("sendMessage", "editMessage");
-        // 2. Buscar el módulo que controla las propiedades y límites de caracteres en el cliente
         const MessageLimits = findByProps("MAX_MESSAGE_LENGTH") || findByProps("getNativeCharacterLimit");
 
-        // Rompemos el límite del cliente para que no salte el aviso de Nitro al escribir
         if (MessageLimits) {
             if (MessageLimits.MAX_MESSAGE_LENGTH) {
-                // Forzamos un límite altísimo de caracteres permitidos en la interfaz
                 Object.defineProperty(MessageLimits, "MAX_MESSAGE_LENGTH", {
                     value: 999999,
                     configurable: true,
@@ -106,7 +102,6 @@ export const onLoad = () => {
             const byNewlines = !!(storage.byNewlines ?? false);
             const delayMs = Number(storage.delayMs ?? 750);
 
-            // Si el mensaje es normal, dejamos que pase sin tocar nada
             if (content.length <= maxLen) {
                 return orig(channelId, message, ...rest);
             }
