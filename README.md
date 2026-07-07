@@ -1,7 +1,9 @@
-# Vendetta Plugins Template
-This repo contains a template for creating [Vendetta](https://github.com/vendetta-mod/Vendetta) plugins.
+# SplitLargeMessages
+Automatically splits messages that exceed Discord's character limit into several smaller messages, rather than blocking them from being sent.
+
+tysm for reading<3
 
 # How to install?
-Paste a plugin URL into the Plugins page of Vendetta, following a basic format of:
+Paste a plugin URL into the Plugins page of revenge, following a basic format of:
 
 https://`YOUR_GITHUB_USERNAME`.github.io/`REPO_NAME`/`PLUGIN_NAME`
